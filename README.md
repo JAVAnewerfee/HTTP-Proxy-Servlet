@@ -1,185 +1,130 @@
-Smiley's HTTP Proxy Servlet
-===========================
+Smiley的HTTP代理Servlet
+这是Java servlet形式的HTTP代理（也称为网关）。HTTP代理对于AJAX应用程序与托管Web应用程序的主机之外的主机上的Web可访问服务进行通信非常有用。它是一个反向代理，并不是真正的转发代理，尽管servlet的模板形式可能会模糊该行。
 
-This is an HTTP Proxy (aka gateway) in the form of a Java servlet.  An HTTP proxy is useful for AJAX applications to communicate with web accessible services on hosts other than where the web application is hosted.  It's a _reverse proxy_, and not really a _forwarding proxy_ albeit the template form of the servlet may blur that line.
+这不是第一个代理，所以我为什么要写它，为什么你会使用它呢？
 
-This is hardly the first proxy, so why did I write it and thus why might you use it?
+这很简单 - 单个源文件实现
+经过测试 - 有信心它有效 建立状态
+它是安全的 - 通过Java EE web.xml或通过诸如Spring-Security之类的servlet过滤器
+它是可扩展的 - 通过简单的类扩展
+它可以嵌入到您的Java Web应用程序中，从而更轻松地测试您的应用程序
+我已经看到很多quick'n'dirty代理在网络上以源代码形式发布，例如在博客中。我发现这样的代理支持有限的HTTP子集，例如只有GET请求，或者遇到其他实现问题，例如性能问题或URL转义错误。对这种情况感到失望，我开始创建一个运行良好且经过充分测试的简单版本，因此我知道它有效。我建议你使用经过良好测试的代理而不是未经测试的代理，这可能更好地描述为概念验证。
 
- * It's simple -- a single source file implementation
- * It's tested -- have confidence it works [![Build Status](https://travis-ci.org/mitre/HTTP-Proxy-Servlet.png)](https://travis-ci.org/mitre/HTTP-Proxy-Servlet)
- * It's securable -- via Java EE web.xml or via a servlet filter such as [Spring-Security]([http://static.springsource.org/spring-security/site/)
- * It's extendible -- via simple class extension
- * It's embeddable -- into your Java web application making testing your app easier
+如果您需要比本页底部列出的更复杂的东西。
 
-I have seen many quick'n'dirty proxies posted in source form on the web such as in a blog.
-I've found such proxies to support a limited HTTP subset, such as only a GET request, or to suffer other implementation problems such as performance issues or URL escaping bugs.
-Disappointed at the situation, I set out to create a simple one that works well and that is well tested so I know it works.
-I suggest you use a well tested proxy instead of something non-tested that is perhaps better described as a proof-of-concept.
+此代理依赖于Apache HttpClient，它为此代理提供了另一个扩展点。在某些时候，我可能会编写一个使用JDK的替代方案，因此没有任何依赖关系，这是可取的。同时，您必须为此及其依赖项添加jar文件：
 
-If you need something more sophisticated than there are some alternatives listed at the bottom of this page.
+ +- org.apache.httpcomponents:httpclient:jar:4.5.2:compile
+    +- org.apache.httpcomponents:httpcore:jar:4.4.4:compile
+    |  +- commons-logging:commons-logging:jar:1.2:compile
+    |  \- commons-codec:commons-codec:jar:1.9:compile
+此代理也支持HttpClient 4.3和更新版本。如果您需要支持较旧的 HttpClient版本，即4.1和4.2，那么请使用此代理的1.8版本。
 
-This proxy depends on [Apache HttpClient](http://hc.apache.org/httpcomponents-client-ga/), which offers another point of extension for this proxy.
-At some point I may write an alternative that uses the JDK and thus doesn't have any dependencies, which is desirable.
-In the mean time, you'll have to add the jar files for this and its dependencies:
+从代理版本1.4开始，默认情况下它将识别“http.proxy”和大多数其他标准Java系统属性。
 
-     +- org.apache.httpcomponents:httpclient:jar:4.5.2:compile
-        +- org.apache.httpcomponents:httpcore:jar:4.4.4:compile
-        |  +- commons-logging:commons-logging:jar:1.2:compile
-        |  \- commons-codec:commons-codec:jar:1.9:compile
+从代理版本1.5开始，可以参数化代理URL，允许您为多个目标服务器使用相同的web.xml servlet规范。它遵循 URI模板RFC，级别1。从客户端发送到ProxyServlet的特殊查询参数（请参阅下面的示例）将映射到匹配的URL模板，替换web.xml中指定的代理的targetUri中的参数。要使用它，必须使用基本servlet的子类。重要！即使使用HTTP POST，模板替换也必须放在查询字符串中。其他应用程序参数可以在POST的url-encoded-form字符串中; 只是没有proxyArgs。
 
-This proxy supports HttpClient 4.3, and newer version too.
-If you need to support _older_ HttpClient versions, namely 4.1 and 4.2, then use  the 1.8 version of this proxy.
+构建和安装
+只需在命令行使用“mvn package”构建jar。jar被构建为“target / smiley-http-proxy-servlet-VERSION.jar”。如果不修改代码，则不必构建jar，因为已发布的版本已部署到maven-central。如果您正在使用maven，那么您可以将其添加到您的pom中的依赖项中，如下所示:(注意：下面的版本不一定是最新版本。）
 
-As of version 1.4 of the proxy, it will by default recognize "http.proxy" and
- most other standard Java system properties.
+<dependency>
+    <groupId>org.mitre.dsmiley.httpproxy</groupId>
+    <artifactId>smiley-http-proxy-servlet</artifactId>
+    <version>1.10</version>
+</dependency>
+常春藤和其他依赖管理器也可以使用。
 
-As of version 1.5 of the proxy, there is the ability to parameterize your proxy URL, allowing you to use
-the same web.xml servlet specification for multiple target servers. It follows the
-[URI Template RFC, Level 1](http://tools.ietf.org/html/rfc6570). Special query
-parameters (see the examples below) sent from the client to the ProxyServlet will
-map to the matching URL template, replacing arguments in the proxy's targetUri as
-specified in the web.xml.  To use this, you must use a subclass of the base servlet.
-IMPORTANT! The template substitutions must be placed in the query string, even when using
-HTTP POST. Other application parameters can be in your POSTed url-encoded-form string; just not
-proxyArgs.
+组态
+参数
+以下是可配置的参数列表
 
-Build & Installation
-------------
+log：一个布尔参数名，用于将输入和目标URL记录到servlet日志中。
+forwardip：支持转发客户端IP的布尔参数名称
+preserveHost：一个布尔参数名，用于保持HOST参数的原样
+preserveCookies：一个布尔参数名，用于保持COOKIES的原样
+http.protocol.handle-redirects：具有自动处理重定向的布尔参数名称
+http.socket.timeout：用于设置套接字连接超时（毫秒）的整数参数名称
+http.read.timeout：一个整数参数名，用于设置套接字读取超时（毫秒）
+targetUri：要代理的目标（目标）URI的参数名称。
+Servlet的
+以下是与Solr服务器通信的web.xml文件的示例摘录：
 
-Simply build the jar using "mvn package" at the command line.
-The jar is built to "target/smiley-http-proxy-servlet-VERSION.jar".
-You don't have to build the jar if you aren't modifying the code, since released
-versions are deployed to maven-central.  If you are using maven then you can
-add this to your dependencies in your pom like so:
-(Note: the version below is not necessarily the latest.)
+<servlet>
+    <servlet-name>solr</servlet-name>
+    <servlet-class>org.mitre.dsmiley.httpproxy.ProxyServlet</servlet-class>
+    <init-param>
+      <param-name>targetUri</param-name>
+      <param-value>http://solrserver:8983/solr</param-value>
+    </init-param>
+    <init-param>
+      <param-name>log</param-name>
+      <param-value>true</param-value>
+    </init-param>
+</servlet>
+<servlet-mapping>
+  <servlet-name>solr</servlet-name>
+  <url-pattern>/solr/*</url-pattern>
+</servlet-mapping>
+下面是一个参数化代理URL匹配查询参数_subHost，_port和_path的示例，例如“ http：// mywebapp / cluster / subpath？_subHost = namenode＆_port = 8080＆_path = monitor ”。请注意不同的代理servlet类。前导下划线不是强制性的，但在发生冲突时将它们与常规查询参数区分开来是很好的：
 
-    <dependency>
-        <groupId>org.mitre.dsmiley.httpproxy</groupId>
-        <artifactId>smiley-http-proxy-servlet</artifactId>
-        <version>1.10</version>
-    </dependency>
+<servlet>
+  <servlet-name>clusterProxy</servlet-name>
+  <servlet-class>org.mitre.dsmiley.httpproxy.URITemplateProxyServlet</servlet-class>
+  <init-param>
+    <param-name>targetUri</param-name>
+    <param-value>http://{_subHost}.behindfirewall.mycompany.com:{_port}/{_path}</param-value>
+  </init-param>
+  <init-param>
+    <param-name>log</param-name>
+    <param-value>true</param-value>
+  </init-param>
+</servlet>
 
-Ivy and other dependency managers can be used as well.
+<servlet-mapping>
+  <servlet-name>clusterProxy</servlet-name>
+  <url-pattern>/mywebapp/cluster/*</url-pattern>
+</servlet-mapping>
+用SpringMVC
+如果你正在使用SpringMVC，那么另一种方法是使用它的 ServletWrappingController， 这样你就可以通过Spring配置这个servlet，它非常灵活，而不必修改你的web.xml。但是，请注意，可能需要一些自定义来在代理部分划分URL; 见问题＃15。
 
+春季启动
+如果您使用的是Spring Boot，请考虑以下基本配置：
 
-Configuration
--------------
-### Parameters
+@Configuration 
+公共 类 SolrProxyServletConfiguration  实现 EnvironmentAware {
 
-The following is a list of parameters that can be configured
-
-+ log: A boolean parameter name to enable logging of input and target URLs to the servlet log.
-+ forwardip: A boolean parameter name to enable forwarding of the client IP
-+ preserveHost: A boolean parameter name to keep HOST parameter as-is  
-+ preserveCookies: A boolean parameter name to keep COOKIES as-is
-+ http.protocol.handle-redirects: A boolean parameter name to have auto-handle redirects
-+ http.socket.timeout: A integer parameter name to set the socket connection timeout (millis)
-+ http.read.timeout: A integer parameter name to set the socket read timeout (millis)
-+ targetUri: The parameter name for the target (destination) URI to proxy to.
-
-
-### Servlet
-
-Here's an example excerpt of a web.xml file to communicate to a Solr server:
-
-    <servlet>
-        <servlet-name>solr</servlet-name>
-        <servlet-class>org.mitre.dsmiley.httpproxy.ProxyServlet</servlet-class>
-        <init-param>
-          <param-name>targetUri</param-name>
-          <param-value>http://solrserver:8983/solr</param-value>
-        </init-param>
-        <init-param>
-          <param-name>log</param-name>
-          <param-value>true</param-value>
-        </init-param>
-    </servlet>
-    <servlet-mapping>
-      <servlet-name>solr</servlet-name>
-      <url-pattern>/solr/*</url-pattern>
-    </servlet-mapping>
-
-Here's an example with a parameterized proxy URL matching query parameters
-_subHost, _port, and _path such as
-"http://mywebapp/cluster/subpath?_subHost=namenode&_port=8080&_path=monitor". Note the different
-proxy servlet class. The leading underscore is not mandatory but it's good to differentiate
-them from the normal query parameters in case of a conflict.:
-
-    <servlet>
-      <servlet-name>clusterProxy</servlet-name>
-      <servlet-class>org.mitre.dsmiley.httpproxy.URITemplateProxyServlet</servlet-class>
-      <init-param>
-        <param-name>targetUri</param-name>
-        <param-value>http://{_subHost}.behindfirewall.mycompany.com:{_port}/{_path}</param-value>
-      </init-param>
-      <init-param>
-        <param-name>log</param-name>
-        <param-value>true</param-value>
-      </init-param>
-    </servlet>
-
-    <servlet-mapping>
-      <servlet-name>clusterProxy</servlet-name>
-      <url-pattern>/mywebapp/cluster/*</url-pattern>
-    </servlet-mapping>
-
-### SpringMVC
-
-If you are using **SpringMVC**, then an alternative is to use its
-[ServletWrappingController](http://static.springsource.org/spring/docs/3.0.x/api/org/springframework/web/servlet/mvc/ServletWrappingController.html)
-so that you can configure this servlet via Spring, which is supremely flexible, instead of having to modify your web.xml. However, note that some
-customization may be needed to divide the URL at the proxied portion; see [Issue #15](https://github.com/mitre/HTTP-Proxy-Servlet/issues/15).
-
-### Spring Boot
-
-If you are using **Spring Boot**, then consider this basic configuration:
-
-```java
-@Configuration
-public class SolrProxyServletConfiguration implements EnvironmentAware {
-
-  @Bean
-  public ServletRegistrationBean servletRegistrationBean(){
-    ServletRegistrationBean servletRegistrationBean = new ServletRegistrationBean(new ProxyServlet(), propertyResolver.getProperty("servlet_url"));
-    servletRegistrationBean.addInitParameter(ProxyServlet.P_TARGET_URI, propertyResolver.getProperty("target_url"));
-    servletRegistrationBean.addInitParameter(ProxyServlet.P_LOG, propertyResolver.getProperty("logging_enabled", "false"));
+  @Bean 
+  公共 ServletRegistrationBean  servletRegistrationBean（）{
+     ServletRegistrationBean servletRegistrationBean =  新 ServletRegistrationBean（新 ProxyServlet的（），propertyResolver 。的getProperty（ “ servlet_url ”））;
+    servletRegistrationBean 。addInitParameter（ProxyServlet的。 P_TARGET_URI，propertyResolver 。的getProperty（ “ target_url ”））;
+    servletRegistrationBean 。addInitParameter（ProxyServlet的。 P_LOG，propertyResolver 。的getProperty（ “ logging_enabled ”，“假”））;
     return servletRegistrationBean;
   }
 
-  private RelaxedPropertyResolver propertyResolver;
+  私人 RelaxedPropertyResolver propertyResolver;
 
-  @Override
-  public void setEnvironment(Environment environment) {
-    this.propertyResolver = new RelaxedPropertyResolver(environment, "proxy.solr.");
+  @覆盖
+  公共 无效 setEnvironment（环境 环境）{
+     此。propertyResolver =  new  RelaxedPropertyResolver（environment，“ proxy.solr。”）;
   }
 }
-```
+和属性application.yml：
 
-and properties in `application.yml`:
-
-```
 proxy:
     solr:
         servlet_url: /solr/*
         target_url: http://solrserver:8983/solr
-```
+可能是Spring Boot（或Spring MVC）在servlet获取之前消耗servlet输入流的情况，这是一个问题。
+请参阅问题＃83 RE禁用FilterRegistrationBean。
 
-It may be the case that Spring Boot (or Spring MVC) is consuming the servlet input stream before the servlet gets it, which is a problem.  
-See [Issue #83](https://github.com/mitre/HTTP-Proxy-Servlet/issues/83#issuecomment-307216795) RE disabling `FilterRegistrationBean`.
+Dropwizard
+添加Smiley对Dropwizard的代理非常简单。
 
-### Dropwizard
+在Dropwizard应用程序.yml文件中添加新属性
 
-Addition of Smiley's proxy to Dropwizard is very straightforward.   
-
-Add a new property in the Dropwizard app `.yml` file
-
-```
 targetUri: http://foo.com/api  
-```
+创建新的配置属性
 
-Create a new configuration property
-
-```
     @NotEmpty
     private String targetUri = "";
 
@@ -187,11 +132,8 @@ Create a new configuration property
     public String getTargetUri() {
         return targetUri;
     }  
-```
+然后通过Dropwizard服务的App run()方法使用Jetty创建注册表Smiley的代理servlet 。
 
-Then create register Smiley's proxy servlet with Jetty through the Dropwizard service's App `run()` method.
-
-```
 @Override
     public void run(final ShepherdServiceConfiguration configuration,
         final Environment environment) {
@@ -200,11 +142,9 @@ Then create register Smiley's proxy servlet with Jetty through the Dropwizard se
         environment.getApplicationContext()
             .addServlet("org.mitre.dsmiley.httpproxy.ProxyServlet", "foo/*")
             .setInitParameter("targetUri", configuration.getTargetUri());  
-```
+备择方案
+这个servlet有意简单，范围有限。因此，它可能无法满足您的需求，因此请考虑以下方法：
 
-Alternatives
--------------
-This servlet is intentionally simple and limited in scope.  As such it may not meet your needs, so consider looking at these alternatives:
-* Jetty's ProxyServlet: https://www.eclipse.org/jetty/documentation/9.4.x/proxy-servlet.html  This is perhaps the closest competitor (simple, limited scope, no dependencies), and may very well already be on your classpath.
-* Netflix's Zuul: https://github.com/Netflix/zuul
-* Charon: https://github.com/mkopylec/charon-spring-boot-starter
+Jetty的ProxyServlet：https：//www.eclipse.org/jetty/documentation/9.4.x/proxy-servlet.html 这可能是最接近的竞争对手（简单，有限的范围，没有依赖关系），可能已经在你的类路径。
+Netflix的Zuul：https：//github.com/Netflix/zuul
+Charon：https：//github.com/mkopylec/charon-spring-boot-starter
