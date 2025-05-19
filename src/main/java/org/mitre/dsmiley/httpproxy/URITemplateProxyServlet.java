@@ -81,7 +81,7 @@ public class URITemplateProxyServlet extends ProxyServlet {
     for (NameValuePair pair : pairs) {
       params.put(pair.getName(), pair.getValue());
     }
-
+//git 测试
     //Now rewrite the URL
     StringBuffer urlBuf = new StringBuffer();//note: StringBuilder isn't supported by Matcher
     Matcher matcher = TEMPLATE_PATTERN.matcher(targetUriTemplate);
