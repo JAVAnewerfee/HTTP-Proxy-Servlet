@@ -215,7 +215,7 @@ public class ProxyServlet extends HttpServlet {
     } catch (Exception e) {
       throw new ServletException("Trying to process targetUri init parameter: "+e,e);
     }
-    System.out.println(targetUriObj.toString());
+    //System.out.println(targetUriObj.toString());
     targetHost = URIUtils.extractHost(targetUriObj);
   }
 
